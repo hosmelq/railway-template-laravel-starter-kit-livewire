@@ -1,13 +1,12 @@
 <?php
 
-use App\Livewire\Settings\Profile;
 use App\Models\User;
 use Livewire\Livewire;
 
 test('profile page is displayed', function () {
     $this->actingAs($user = User::factory()->create());
 
-    $this->get('/settings/profile')->assertOk();
+    $this->get(route('profile.edit'))->assertOk();
 });
 
 test('profile information can be updated', function () {
@@ -15,7 +14,7 @@ test('profile information can be updated', function () {
 
     $this->actingAs($user);
 
-    $response = Livewire::test(Profile::class)
+    $response = Livewire::test('pages::settings.profile')
         ->set('name', 'Test User')
         ->set('email', 'test@example.com')
         ->call('updateProfileInformation');
@@ -29,12 +28,47 @@ test('profile information can be updated', function () {
     expect($user->email_verified_at)->toBeNull();
 });
 
+test('email is stored in lowercase so the user can still log in', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::settings.profile')
+        ->set('name', 'Test User')
+        ->set('email', 'Test@Example.com')
+        ->call('updateProfileInformation')
+        ->assertHasNoErrors();
+
+    expect($user->refresh()->email)->toEqual('test@example.com');
+
+    $this->post(route('logout'));
+
+    $this->post(route('login.store'), [
+        'email' => 'Test@Example.com',
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticatedAs($user);
+});
+
+test('email must be unique regardless of case', function () {
+    User::factory()->create(['email' => 'taken@example.com']);
+
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages::settings.profile')
+        ->set('name', 'Test User')
+        ->set('email', 'Taken@Example.com')
+        ->call('updateProfileInformation')
+        ->assertHasErrors(['email']);
+});
+
 test('email verification status is unchanged when email address is unchanged', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user);
 
-    $response = Livewire::test(Profile::class)
+    $response = Livewire::test('pages::settings.profile')
         ->set('name', 'Test User')
         ->set('email', $user->email)
         ->call('updateProfileInformation');
@@ -49,7 +83,7 @@ test('user can delete their account', function () {
 
     $this->actingAs($user);
 
-    $response = Livewire::test('settings.delete-user-form')
+    $response = Livewire::test('pages::settings.delete-user-modal')
         ->set('password', 'password')
         ->call('deleteUser');
 
@@ -66,7 +100,7 @@ test('correct password must be provided to delete account', function () {
 
     $this->actingAs($user);
 
-    $response = Livewire::test('settings.delete-user-form')
+    $response = Livewire::test('pages::settings.delete-user-modal')
         ->set('password', 'wrong-password')
         ->call('deleteUser');
 
